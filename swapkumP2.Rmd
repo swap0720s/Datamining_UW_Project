@@ -1,0 +1,141 @@
+---
+title: "Swapkum"
+author: "Swapkum"
+date: "2023-03-18"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#install.packages("mlbench")
+```
+
+```{r}
+library(mlbench)
+```
+
+#Data
+```{r}
+data(BreastCancer)
+ls(BreastCancer)
+```
+
+#libraries
+```{r}
+library(e1071)
+library(klaR)
+library(nnet)
+library(MASS)
+library(rpart)
+library(randomForest)
+library(caret)
+```
+
+```{r}
+summary(BreastCancer)
+
+BreastCancer <- na.omit(BreastCancer) 
+
+BreastCancer$Id <- NULL 
+head(BreastCancer)
+str(BreastCancer)
+df2 <- data.frame(sapply(BreastCancer[1:9], function(x) as.numeric(as.character(x))))
+z <- scale(df2[,1:9],center=TRUE,scale=TRUE)
+head(z)
+
+set.seed(2)
+ind <- createDataPartition(BreastCancer$Class, p = 0.6, list = FALSE)
+breastCance.train <- BreastCancer[ind,]
+breastCance.test <- BreastCancer[-ind,]
+```
+
+
+#SVM
+```{r}
+mysvm <- svm(Class ~ ., breastCance.train)
+mysvm.pred <- predict(mysvm, breastCance.test)
+table(mysvm.pred,breastCance.test$Class)
+```
+
+#Naive Bayes
+```{r}
+mynb <- NaiveBayes(Class ~ ., breastCance.train, usekernel = TRUE)
+mynb.pred <- predict(mynb,breastCance.test)
+#head(mynb.pred$class)
+table(mynb.pred$class,breastCance.test$Class)
+str(mysvm.pred)
+str(mynb.pred)
+```
+
+#Decision trees
+```{r}
+mytree <- rpart(Class ~ ., breastCance.train)
+plot(mytree); text(mytree) 
+summary(mytree)
+mytree.pred <- predict(mytree,breastCance.test,type="class")
+table(mytree.pred,breastCance.test$Class)
+```
+
+# Leave-1-Out Cross Validation (LOOCV)
+```{r}
+ans <- numeric(length(BreastCancer[,1]))
+for (i in 1:length(BreastCancer[,1])) {
+  mytree <- rpart(Class ~ ., BreastCancer[-i,])
+  mytree.pred <- predict(mytree,BreastCancer[i,],type="class")
+  ans[i] <- mytree.pred
+}
+ans <- factor(ans,labels=levels(BreastCancer$Class))
+table(ans,BreastCancer$Class)
+```
+
+
+
+#Regularised Discriminant Analysis
+```{r}
+myrda <- rda(Class ~ ., breastCance.train)
+myrda.pred <- predict(myrda, breastCance.test)
+table(myrda.pred$class,breastCance.test$Class)
+```
+
+#Random Forests
+```{r}
+myrf <- randomForest(Class ~ ., breastCance.train)
+myrf.pred <- predict(myrf, breastCance.test)
+head(myrf.pred)
+table(myrf.pred, breastCance.test$Class)
+
+```
+
+
+```{r}
+combine.classes<-data.frame(myrf.pred, myrda.pred$class, 
+                            mytree.pred,#mysvm.pred, 
+                            mynb.pred$class)
+head(combine.classes)
+head(myrf.pred)
+head(myrda.pred)
+combine.classes$myrf.pred<-ifelse(combine.classes$myrf.pred=="benign", 0, 1)
+combine.classes[,2]<-ifelse(combine.classes[,2]=="benign", 0, 1)
+combine.classes[,3]<-ifelse(combine.classes[,3]=="benign", 0, 1)
+combine.classes[,4]<-ifelse(combine.classes[,4]=="benign", 0, 1)
+#combine.classes[,5]<-ifelse(combine.classes[,5]=="benign", 0, 1)
+#combine.classes[,6]<-ifelse(combine.classes[,6]=="benign", 0, 1)
+str(combine.classes)
+combine.cl<-combine.classes[, -c(5,6)]
+majority.vote=rowSums(combine.classes[,-c(5,6)])
+head(majority.vote)
+combine.classes[,5]<-rowSums(combine.classes[,-c(5,6)])
+combine.classes[,6]<-ifelse(combine.classes[,5]>=4, "malignant", "benign")
+table(combine.classes[,6], breastCance.test$Class)
+
+Confusion_combine <-table(combine.classes[,6], breastCance.test$Class)
+accuracy <- sum(diag(Confusion_combine))/sum(Confusion_combine)
+accuracy
+```
+
